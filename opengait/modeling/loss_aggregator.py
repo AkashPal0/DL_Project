@@ -62,7 +62,7 @@ class LossAggregator(nn.Module):
         for k, v in training_feats.items():
             if k in self.losses:
                 loss_func = self.losses[k]
-                loss, info = loss_func(**v)
+                loss, info = loss_func(**v) ###CrossEntropyLoss  and TripletLoss
                 for name, value in info.items():
                     loss_info['scalar/%s/%s' % (k, name)] = value
                 loss = loss.mean() * loss_func.loss_term_weight

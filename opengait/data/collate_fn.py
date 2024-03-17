@@ -48,15 +48,26 @@ class CollateFn(object):
         global count
         count = 0
 
-        def Gei(sampled_fras, frame_count):
-            gei = np.mean(sampled_fras[0], axis=0, dtype=np.uint8)
-            return gei
+        # def Gei(sampled_fras, frame_count):
+        #     gei = np.mean(sampled_fras[0], axis=0, dtype=np.uint8)
+        #     return gei
 
         def sample_frames(seqs):
             global count
             sampled_fras = [[] for i in range(feature_num)]
-            seq_len = len(seqs[0])
+            seq_len = len(seqs[0]) ## number of frames
             indices = list(range(seq_len))
+
+            ### My code
+
+            if self.sampler in ['all'] and seq_len < self.frames_all_limit:
+                print("seq_len: ",seq_len)
+                for i in range(5):
+                    seqs[0] = np.concatenate((seqs[0],seqs[0]), axis=0)
+                seq_len = len(seqs[0])
+                indices = list(range(seq_len))                
+
+            ####
 
             if self.sampler in ['fixed', 'unfixed']:
                 if self.sampler == 'fixed':
@@ -66,7 +77,7 @@ class CollateFn(object):
                         list(range(self.frames_num_min, self.frames_num_max+1)))
 
                 if self.ordered:
-                    fs_n = frames_num + self.frames_skip_num
+                    fs_n = frames_num + 1
                     if seq_len < fs_n:
                         it = math.ceil(fs_n / seq_len)
                         seq_len = seq_len * it
@@ -76,9 +87,10 @@ class CollateFn(object):
                     end = start + fs_n
                     idx_lst = list(range(seq_len))
                     idx_lst = idx_lst[start:end]
-                    idx_lst = sorted(np.random.choice(
-                        idx_lst, frames_num, replace=False))
-                    indices = [indices[i] for i in idx_lst]
+                    choice1 = np.random.choice(
+                        idx_lst, frames_num, replace=False)
+                    idx_lst1 = sorted(choice1)
+                    indices = [indices[i] for i in idx_lst1]
                 else:
                     replace = seq_len < frames_num
 
@@ -95,7 +107,7 @@ class CollateFn(object):
                     sampled_fras[i].append(seqs[i][j])
 
             frame_count_for_gei = 10
-            new_sampled_frames = Gei(sampled_fras, frame_count_for_gei)
+            # new_sampled_frames = Gei(sampled_fras, frame_count_for_gei)
             # print(new_sampled_frames.shape)
             # for i in range(0,30): 
             #     plt.imshow(sampled_fras[0][i], cmap='gray')

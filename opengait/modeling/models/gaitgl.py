@@ -166,11 +166,11 @@ class GaitGL(BaseModel):
         outs = self.GLConvA0(outs) ###train [64, 64, 10, 64, 44] ###test [1,64,25,64,44]
         outs = self.MaxPool0(outs) ###test [1,32,25,32,22]
 
-        outs = self.GLConvA1(outs) ###test [1,32,25,64,44]
-        outs = self.GLConvB2(outs)  # [n, c, s, h, w] ###train [64, 128, ] ###test [1,128,25,64,22]
+        outs = self.GLConvA1(outs) ### train [36, 128, 10, 32, 32] ###test [1,32,25,64,44]
+        outs = self.GLConvB2(outs)  # [n, c, s, h, w] ###train [36, 128, 10, 64, 32 ] ###test [1,128,25,64,22]
 
-        outs = self.TP(outs, seqL=seqL, options={"dim": 2})[0]  # [n, c, h, w] ###test [1,128,64,22]
-        outs = self.HPP(outs)  # [n, c, p] ###test [1,128,64]
+        outs = self.TP(outs, seqL=seqL, options={"dim": 2})[0]  # [n, c, h, w] #train train [36, 128, 64, 32 ] ###test [1,128,64,22]
+        outs = self.HPP(outs)  # [n, c, p] # train [36, 128, 64] ###test [1,128,64]
 
         gait = self.Head0(outs)  # [n, c, p] ###test [1,128,64]
 
@@ -182,7 +182,7 @@ class GaitGL(BaseModel):
             bnft, logi = self.BNNecks(gait)  # [n, c, p]
             embed = gait
 
-        n, _, s, h, w = sils.size()
+        n, _, s, h, w = sils.size() ## [64, 1, 30, 64, 44]
         retval = {
             'training_feat': {
                 'triplet': {'embeddings': embed, 'labels': labs},

@@ -24,7 +24,7 @@ class TripletSampler(tordata.sampler.Sampler):
         while True:
             sample_indices = []
             pid_list = sync_random_sample_list(
-                self.dataset.label_set, self.batch_size[0]) ## 8 ids choosen randomly
+                self.dataset.label_set, self.batch_size[0]) ## 3 ids choosen randomly
 
             for pid in pid_list:
                 indices = self.dataset.indices_dict[pid]

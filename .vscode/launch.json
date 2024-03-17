@@ -16,7 +16,7 @@
                 "1",
                 "opengait/main.py",
                 "--cfgs",
-                "./configs/vivit_model/vivit_model.yaml",
+                "./configs/autoformer/autoformer.yaml",
                 "--phase",
                 "train"
               ],

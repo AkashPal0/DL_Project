@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-
+from torch import einsum
+from einops import rearrange
 from .base import BaseLoss, gather_and_scale_wrapper
 
 
@@ -10,21 +11,42 @@ class TripletLoss(BaseLoss):
         self.margin = margin
 
     @gather_and_scale_wrapper
-    def forward(self, embeddings, labels): ## [64 128 64]
-        # embeddings: [n, c, p], label: [n]
-        embeddings = embeddings.permute(
-            2, 0, 1).contiguous().float()  # [n, c, p] -> [p, n, c] [64 64 128]
+    # def forward(self, embeddings, labels): ## [64 128 64]
+    #     # embeddings: [n, c, p], label: [n]
+    #     embeddings = embeddings.permute(
+    #         2, 0, 1).contiguous().float()  # [n, c, p] -> [p, n, c] [64 64 128]
 
-        ref_embed, ref_label = embeddings, labels
-        dist = self.ComputeDistance(embeddings, ref_embed)  # [p, n1, n2] ## [64 64 64]
-        mean_dist = dist.mean((1, 2))  # [p]
-        ap_dist, an_dist = self.Convert2Triplets(labels, ref_label, dist)
-        dist_diff = (ap_dist - an_dist).view(dist.size(0), -1)
-        loss = F.relu(dist_diff + self.margin)
+    #     ref_embed, ref_label = embeddings, labels
+    #     dist = self.ComputeDistance(embeddings, ref_embed)  # [p, n1, n2] ## [64 64 64]
+    #     mean_dist = dist.mean((1, 2))  # [p]
+    #     ap_dist, an_dist = self.Convert2Triplets(labels, ref_label, dist)
+    #     dist_diff = (ap_dist - an_dist).view(dist.size(0), -1)
+    #     loss = F.relu(dist_diff + self.margin)
+
+    #     hard_loss = torch.max(loss, -1)[0]
+    #     loss_avg, loss_num = self.AvgNonZeroReducer(loss)
+
+    #     self.info.update({
+    #         'loss': loss_avg.detach().clone(),
+    #         'hard_loss': hard_loss.detach().clone(),
+    #         'loss_num': loss_num.detach().clone(),
+    #         'mean_dist': mean_dist.detach().clone()})
+
+    #     return loss_avg, self.info
+
+    def forward(self, embeddings, labels):
+            # embeddings : [b p c], label [b]
+        embeddings = rearrange(embeddings, 'b p c -> p b c')
+        inner_prod = einsum('p i c , p j c -> p i j', embeddings, embeddings) ## [p b b]
+        attn = F.softmax(inner_prod/(128**(-0.05)), dim=0)
+        ref_label = labels
+        ap_simlrty, an_simlrty = self.Convert2Triplets(labels, ref_label, attn)
+        simlarty_diff = (an_simlrty-ap_simlrty).view(attn.size(0), -1)
+        loss = F.relu(simlarty_diff + self.margin)
 
         hard_loss = torch.max(loss, -1)[0]
         loss_avg, loss_num = self.AvgNonZeroReducer(loss)
-
+        mean_dist = attn.mean((1, 2)) ## need to change this
         self.info.update({
             'loss': loss_avg.detach().clone(),
             'hard_loss': hard_loss.detach().clone(),
@@ -32,6 +54,8 @@ class TripletLoss(BaseLoss):
             'mean_dist': mean_dist.detach().clone()})
 
         return loss_avg, self.info
+
+
 
     def AvgNonZeroReducer(self, loss):
         eps = 1.0e-9

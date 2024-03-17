@@ -6,6 +6,7 @@ from einops.layers.torch import Rearrange
 from torch import nn, einsum
 from ..base_model import BaseModel
 from ..modules import SeparateFCs, BasicConv3d, PackSequenceWrapper, SeparateBNNecks
+from utils import visualisation as TSNE_Visual
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
@@ -47,18 +48,62 @@ class Attention(nn.Module):
         # out =  self.to_out(out)
         return out, attn
 
+# class FeedForward(nn.Module):
+#     def __init__(self, dim, hidden_dim, dropout = 0.):
+#         super().__init__()
+#         self.net = nn.Sequential(
+#             nn.Linear(dim, hidden_dim),
+#             nn.GELU(),
+#             nn.Dropout(dropout),
+#             nn.Linear(hidden_dim, dim),
+#             nn.Dropout(dropout)
+#         )
+#     def forward(self, x):
+#         return self.net(x)
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, cls_num):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout)
+            nn.Linear(768, cls_num)
         )
     def forward(self, x):
         return self.net(x)
+
+class HorizontalPool(nn.Module):
+    def __init__(self, patch_size):
+        super().__init__()
+        self.HP = nn.MaxPool3d(kernel_size = (1, 1, patch_size), stride=(1, 1, patch_size), padding=0, dilation=1, return_indices=False, ceil_mode=False)
+    
+    def forward(self, x):
+        return self.HP(x)
+
+class VerticalPool(nn.Module):
+    def __init__(self, patch_size):
+        super().__init__()
+        self.VP = nn.AvgPool3d(kernel_size = (1, patch_size, 1), stride=(1, patch_size, 1), padding=0, ceil_mode=False)
+    
+    def forward(self, x):
+        return self.VP(x)
+
+class TemporalPool(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv_ = nn.Conv3d(in_channels= 6, out_channels= 1,kernel_size=(1, 1, 1), stride=(1, 1, 1), bias=False)
+        self.max_ = nn.MaxPool3d(kernel_size = (6, 1, 1), stride=(6, 1, 1))
+        self.avg_ = nn.AvgPool3d(kernel_size = (6, 1, 1), stride=(6, 1, 1))
+
+    def forward(self, x):
+        x1 = self.avg_(x)
+        x1 = x1.squeeze()
+        x2 = self.max_(x)
+        x2 = x2.squeeze()
+        x = rearrange(x, 'b c t h w -> b t c h w') ## [b 1 c h w]
+        x3 = self.conv_(x)
+        x3 = x3.squeeze()
+        return ((x1+x2)+x3) ## [b c h w]
+
+        
 
 class Transformer(nn.Module):
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
@@ -77,16 +122,16 @@ class Transformer(nn.Module):
     def forward(self, x):
         attntn, adj_mat = self.pre_norm(x)
         x = attntn + x
-        x = self.norm(x)
-        ff = self.feed_forward(x)
+        x1 = self.norm(x)
+        ff = self.feed_forward(x1)
+        del x1
         x = x + ff
         return x, adj_mat
+
 
 class ViViT(BaseModel):
     def __init__(self, cfgs, training):
         super(ViViT, self).__init__(cfgs, training)
-        
-
         
 
     def build_network(self, model_cfg):
@@ -99,6 +144,7 @@ class ViViT(BaseModel):
         self.dropout = 0.
         self.emb_dropout = 0.
         self.scale_dim = 4
+        self.cls_num = 74
         assert self.image_size % self.patch_size == 0, 'Image dimensions must be divisible by the patch size.'
         num_patches = (self.image_size // self.patch_size) ** 2    # Number of tubulets per frame
         num_tub = self.num_frames//self.tub_depth   # 6               # Number of tubulets in temporal dimension
@@ -115,18 +161,26 @@ class ViViT(BaseModel):
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_tub, num_patches, dim)) #[1, 6, 64, 128]
         self.space_token = nn.Parameter(torch.randn(1, 1, dim))
+        self.make_query = nn.Parameter(torch.randn(1, 1, dim, dim))
         self.space_transformer = Transformer(dim, self.depth, self.heads, dim_head, dim*self.scale_dim, self.dropout)
 
         self.temporal_token = nn.Parameter(torch.randn(1, 1, dim))
         self.temporal_transformer = Transformer(dim, self.depth, self.heads, dim_head, dim*self.scale_dim, self.dropout)
-
         self.dropout = nn.Dropout(self.emb_dropout)
+        self.HP = HorizontalPool(self.patch_size)
+        self.VP = VerticalPool(self.patch_size)
+        self.FCNN = FeedForward(dim, self.cls_num)
+        self.TP = TemporalPool()
+        self.FF = nn.Sequential(nn.Linear(128, 128))
+        self.ce_input = nn.Sequential(Rearrange('b n c -> b c n'),
+                                      nn.Conv2d(in_channels=128, out_channels=74, kernel_size=(1,1), stride=(1,1)),
+                                      Rearrange('b c n -> b n c'))
+    
 
     def forward(self, x):
         ipts, labs, _, _, seqL = x
         ipts = ipts[0].unsqueeze(1) #ipts == [6, 1, 30, 64, 64]
-        x = self.to_patch_embedding(ipts) ## ipts == [6, 1, 30, 64, 44] ==> [6, 6, 64, 128]
-        del ipts
+        x = self.to_patch_embedding(ipts) ## ipts == [6, 1, 30, 64, 64] ==> [6, 6, 64, 128]
         b, t, n, _ = x.shape
 
         for i in range(3):
@@ -141,7 +195,7 @@ class ViViT(BaseModel):
 
             x, space_adj_mat = self.space_transformer(x) ## x = [6, 6, 64, 128]
         
-            x = rearrange(x, 'b t n c -> b n t c') ## [6, 65, 6, 128]
+            x = rearrange(x, 'b t n c -> b n t c') ## [6, 64, 6, 128]
             # r = x.shape[1]
 
             # if(i == 0):
@@ -149,13 +203,45 @@ class ViViT(BaseModel):
                 # x = torch.cat((cls_temporal_tokens, x), dim=2) ##[6, 65, 7, 128]
             x, temporal_adj_mat = self.temporal_transformer(x)
 
-            x = rearrange(x, 'b n t c -> b t n c') ## x = [6, 7, 65, 128]
+            x = rearrange(x, 'b n t c -> b t n c') ## x = [6, 6, 64, 128]
 
+        x = rearrange(x, 'b t (h w) c -> b c t h w', h = self.patch_size, w = self.patch_size) ## x = [6, 128, 6, 8, 8]
 
+        '''
+        Implementing for CE Loss
+        
+        '''
+        x1 = self.HP(x) ## x = [6, 128, 6, 8, 1]
+        x1 = self.VP(x1) ## x = [6, 128, 6, 1, 1]
+        x1 = x1.squeeze()## x = [6, 128, 6]        
+        # TSNE_Visual.visual_summary(x, labs)
+        fcnn = rearrange(x1, 'b c t -> b (c t)')
+        embed1 = self.FCNN(fcnn)
 
-        out_cls_token = x[:, 0, 0]
-        none2 = x[:, 1:, 1:]
-        return out_cls_token, x[:, 1:, 1:], space_adj_mat, temporal_adj_mat
+        '''
+        Implementing for CA Loss
+        
+        ''' 
+        CA = self.TP(x)
+        CA = rearrange(CA, 'b c h w -> b h w c')
+        embed2 = rearrange(self.FF(CA), 'b h w c -> b (h w) c')
+        
+        retval = {
+            'training_feat': {
+                'triplet': {'embeddings': embed2, 'labels': labs},
+                'softmax': {'logits': embed1, 'labels': labs}
+                # 'temporal_attn': {'attn': temporal_adj_mat, 'labels': labs},
+                # 'spatial_attn': {'attn': space_adj_mat, 'labels': labs}
+            },
+            'visual_summary': {
+                'image/sils': rearrange(ipts, 'n c t h w -> (n c t) 1 h w') #ipts == [6, 1, 30, 64, 64]
+            },
+            'inference_feat': {
+                'embeddings': x
+            }
+        }
+
+        return retval
 
 
 frame_size = 64
