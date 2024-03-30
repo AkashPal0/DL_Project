@@ -10,13 +10,13 @@
             "type": "debugpy",
             "request": "launch",
             "console": "integratedTerminal",
-            "module" : "torch.distributed.launch",
+            "module" : "torch.distributed.run",
             "args": [
                 "--nproc_per_node",
                 "1",
                 "opengait/main.py",
                 "--cfgs",
-                "./configs/autoformer/autoformer.yaml",
+                "./configs/autogaitformer/autogaitformer.yaml",
                 "--phase",
                 "train"
               ],

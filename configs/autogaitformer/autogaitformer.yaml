@@ -1,7 +1,7 @@
 # Note  : *** the batch_size should be equal to the gpus number at the test phase!!! ***
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /media/ani/TOSHIBA_E1/GAIT_Dataset/CASIA-B-pkl
+  dataset_root: /media/ani/TOSHIBA_E/GAIT_Dataset/CASIA-B-pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json # for train and test
   num_workers: 1
   remove_no_gallery: false
@@ -11,17 +11,17 @@ evaluator_cfg:
   enable_float16: false 
   restore_ckpt_strict: true
   restore_hint: 80000
-  save_name: autoformer
+  save_name: autogaitformer
   sampler:
     batch_size: 1 ## Keep this eqaul to the gpus number
     sample_type: all_ordered
     type: InferenceSampler
 
 loss_cfg:
-  # - loss_term_weight: 1.0
-  #   margin: 0.2 #margin for triplet loss
-  #   type: TripletLoss
-  #   log_prefix: triplet
+  - loss_term_weight: 1.0
+    margin: 0.2 #margin for triplet loss
+    type: TripletLoss
+    log_prefix: triplet
   - loss_term_weight: 1.0
     scale: 1
     type: CrossEntropyLoss
@@ -30,9 +30,11 @@ loss_cfg:
     log_prefix: softmax
 
 model_cfg:
-  model: AutoFormer
+  model: AutoGaitFormer
   channels: [32, 64, 128]
   class_num: 74
+  block_height : [4, 8, 16]
+  patch_size : [4, [8, 4], [16, 8, 4]]
 
 optimizer_cfg:
   lr: 1.0e-4
@@ -52,7 +54,7 @@ trainer_cfg:
   restore_ckpt_strict: true
   restore_hint: 0
   save_iter: 10000
-  save_name: autoformer
+  save_name: autogaitformer
   sync_BN: true
   total_iter: 80000
   sampler:

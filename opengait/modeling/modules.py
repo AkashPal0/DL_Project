@@ -4,7 +4,59 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils import clones, is_list_or_tuple
 from torchvision.ops import RoIAlign
+from einops.layers.torch import Rearrange
+from torch import Tensor
+from einops import rearrange
+from torch import nn, einsum
 
+
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, dim, patch_size):
+        super().__init__()
+        self.ConvertToPatch = Rearrange('b t s (h p1) (w p2) -> b t s (h w) (p1 p2)', p1=patch_size, p2=patch_size) ## [6, 30, 4, 64, 16]
+        self.projection = nn.Linear(dim, dim)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.ConvertToPatch(x)
+        x = self.projection(x)
+        return x
+    
+class Attention(nn.Module):
+    def __init__(self, dim, n_heads, dropout = 0.):
+        super().__init__()
+        self.heads = n_heads
+        self.scale = (dim/n_heads) ** -0.5
+
+        self.to_qkv = nn.Linear(dim, dim * 3, bias = False)
+
+    def forward(self, x):
+        b, t, s, n, _, h = *x.shape, self.heads
+        qkv0 = self.to_qkv(x)
+        qkv = qkv0.chunk(3, dim = -1)
+        del qkv0
+        q, k, v = map(lambda m: rearrange(m, 'b t s n (h d) -> b t s h n d', h = h), qkv)
+        dots = einsum('b t s h i d, b t s h j d -> b t s h i j', q, k) * self.scale
+        attn = dots.softmax(dim=-1)
+        out = einsum('b t s h i j, b t s h j d -> b t s h i d', attn, v)
+        out = rearrange(out, 'b t s h n d -> b t s n (h d)')
+        # out =  self.to_out(out)
+        return out
+
+
+class PositionalEncodings(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, time):
+        device = time.device
+        half_dim = self.dim // 2
+        encodings = np.log(10000) / (half_dim - 1)
+        encodings = torch.exp(torch.arange(half_dim, device=device) * -encodings)
+        encodings = time[:, None] * encodings[None, :]
+        encodings = torch.cat((encodings.sin(), encodings.cos()), dim=-1)
+        return encodings
 
 class HorizontalPoolingPyramid():
     """
