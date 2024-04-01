@@ -2,7 +2,7 @@ from ..base_model import BaseModel
 import torch
 import numpy as np
 from einops import rearrange
-from ..modules import PatchEmbedding, Attention, PositionalEncodings
+from ..modules import PatchEmbedding, Attention, PositionalEncodings, CustomConv2d
 from torch import nn
 
     
@@ -25,6 +25,7 @@ class AutoGaitFormer(BaseModel):
         self.dropout=0.
         self.heads=8
         self.height = 64
+        self.width = 64
         self.width = self.block_width
         self.patch_size = self.patch_size
 
@@ -55,6 +56,9 @@ class AutoGaitFormer(BaseModel):
         self.patch_embedding_L3_rest = PatchEmbedding(self.dim[2][2], self.patch_size[2][2])
         self.pos_encoding_L3_rest = PositionalEncodings(self.dim[2][2])
         self.attention_L3_rest = Attention(self.dim[2][2], self.heads)
+
+        # 1x1 Conv
+        self.custom_conv = CustomConv2d(self.width, option="MaxPool2d")
 
         # self.patch_embedding_L2 = PatchEmbedding(self.dim[1], self.patch_size[0])
     
@@ -153,6 +157,9 @@ class AutoGaitFormer(BaseModel):
         x = torch.cat((y1, y2), dim=2)
         del y1, y2
         x = rearrange(x, 'b t s h w -> b t (s h) w')
+
+        ''' 1x1 Conv '''
+        x = self.custom_conv(x)
         
         ''' AutoFormer '''
         
