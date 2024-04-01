@@ -113,7 +113,7 @@ class AutoGaitFormer(BaseModel):
         x = rearrange(x, 'b t s h w -> b t (s h) w')
 
         '''Block 3'''
-        x = rearrange(x, 'b t (s h) w -> b t s h w', h=self.block_height[2]) ## block_height= 8, x = [6, 32, 4, 16, 64]
+        x = rearrange(x, 'b t (s h) w -> b t s h w', h=self.block_height[2]) ## block_height= 16, x = [6, 32, 4, 16, 64]
         y1, y2 = torch.split(x, [1, (self.height//self.block_height[2])-1], dim=2)
         y21, y22 = torch.split(y2, [1, (self.height//self.block_height[2])-2], dim=2)
         y1 = self.patch_embedding_L3_first(y1)
