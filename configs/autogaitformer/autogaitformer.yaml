@@ -1,7 +1,7 @@
 # Note  : *** the batch_size should be equal to the gpus number at the test phase!!! ***
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /media/ani/TOSHIBA_E/GAIT_Dataset/CASIA-B-pkl
+  dataset_root: /home/akash/Use/DL_Project/DL_Project-main/CASIA-B-pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json # for train and test
   num_workers: 1
   remove_no_gallery: false
