@@ -57,6 +57,24 @@ class PositionalEncodings(nn.Module):
         encodings = time[:, None] * encodings[None, :]
         encodings = torch.cat((encodings.sin(), encodings.cos()), dim=-1)
         return encodings
+    
+class CustomConv2d(nn.Module):
+    def __init__(self, in_c, option="Conv2d"):
+        super().__init__()
+        self.width = in_c
+        self.option = option
+        self.conv = nn.Conv2d(in_channels = self.width, out_channels = 1, kernel_size = 1, stride = 1, padding = 0)
+
+    def forward(self, x):
+        if(self.option == "Conv2d"):
+            x = rearrange(x, 'b t h w -> b w h t')
+            x = self.conv(x)
+            x = rearrange(x, 'b w h t -> b t h w')
+            x = x.squeeze(3)
+        elif(self.option == "MaxPool2d"):
+            x = torch.nn.MaxPool2d(kernel_size=(1, 64), stride=1)(x)
+            x = x.squeeze(3)
+        return x
 
 class HorizontalPoolingPyramid():
     """
