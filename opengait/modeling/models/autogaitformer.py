@@ -4,6 +4,9 @@ import numpy as np
 from einops import rearrange
 from ..modules import PatchEmbedding, Attention, PositionalEncodings, CustomConv2d
 from torch import nn
+from ..layers.Embed import DataEmbedding_wo_pos
+from ..layers.AutoCorrelation import AutoCorrelation, AutoCorrelationLayer
+from ..layers.Autoformer_EncDec import Encoder, EncoderLayer
 
     
 class AutoGaitFormer(BaseModel):
@@ -21,13 +24,15 @@ class AutoGaitFormer(BaseModel):
                              np.array(self.patch_size[1])**2,
                              np.array(self.patch_size[2])**2),
                              dtype=object)
-        self.emb_dim = 16
+        self.emb_dim = 64 # Emdedding dimension is 64 x 1
         self.dropout=0.
-        self.heads=8
+        self.heads= model_cfg['heads']
         self.height = 64
         self.width = 64
         self.width = self.block_width
         self.patch_size = self.patch_size
+        self.factor = model_cfg['factor']
+        self.moving_avg = model_cfg['moving_avg']
 
         # Patching
         # Block 1
@@ -69,6 +74,24 @@ class AutoGaitFormer(BaseModel):
         # # Self Attention
         # self.attention = Attention(dim = self.emb_dim, n_heads = self.heads, dropout = self.dropout)
 
+        # AutoFormer Encoder
+        self.enc_embedding = DataEmbedding_wo_pos(c_in = self.emb_dim, d_model = self.emb_dim, dropout = self.dropout)
+
+        self.encoder = Encoder([
+            EncoderLayer(
+                attention = AutoCorrelationLayer(
+                    correlation = AutoCorrelation(False, self.factor),
+                    d_model = self.emb_dim,
+                    n_heads = self.heads
+                ),
+                d_model = self.emb_dim,
+                d_ff = 4 * self.emb_dim,
+                moving_avg = self.moving_avg,
+                dropout = self.dropout,
+                activation = "relu"
+            )
+            for _ in range(1)
+        ])
 
     def forward(self, x):
         ipts, labs, _, _, seqL = x
@@ -162,4 +185,5 @@ class AutoGaitFormer(BaseModel):
         x = self.custom_conv(x)
         
         ''' AutoFormer '''
-        
+        enc_out = self.enc_embedding(x)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
