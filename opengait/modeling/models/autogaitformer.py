@@ -26,7 +26,7 @@ class AutoGaitFormer(BaseModel):
                              dtype=object)
         self.emb_dim = 64 # Emdedding dimension is 64 x 1
         self.dropout=0.
-        self.heads= model_cfg['heads']
+        self.heads= model_cfg['num_heads']
         self.height = 64
         self.width = 64
         self.width = self.block_width
@@ -93,6 +93,10 @@ class AutoGaitFormer(BaseModel):
             for _ in range(1)
         ])
 
+        self.Conv1 = nn.Conv2d(in_channels=1, out_channels=128, kernel_size=3, stride=1, padding=1, bias=False)
+        self.ff = nn.Sequential(nn.Linear(in_features=128, out_features=128), nn.ReLU())
+        self.ff2 = nn.Sequential(nn.Linear(in_features=128, out_features=74), nn.ReLU())
+
     def forward(self, x):
         ipts, labs, _, _, seqL = x
         ipts = ipts[0] ## ipts = [6, 32, 64, 64]
@@ -101,7 +105,7 @@ class AutoGaitFormer(BaseModel):
         x = rearrange(ipts, 'b t (s h) w -> b t s h w', h=self.block_height[0]) ## block_height= 4, x = [6, 32, 16, 4, 64]
         x = self.patch_embedding_L1(x)
         b, t, s, n, _ = x.shape  # s is number of strips
-        time = torch.linspace(start = 0, end = s*n -1, steps = s*n).to('cuda')
+        time = torch.linspace(start = 0, end = s*n -1, steps = s*n).to('cuda')    #positional embedding
         y = self.pos_encoding_L1(time) ##
         y = y.unsqueeze(0).unsqueeze(0)
         y = rearrange(y, 'b t (n s) d -> b t s n d', s = s)
@@ -187,3 +191,20 @@ class AutoGaitFormer(BaseModel):
         ''' AutoFormer '''
         enc_out = self.enc_embedding(x)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        ''' Final Conv '''
+        x = enc_out.unsqueeze(1) # [6, 1, 32, 64]
+        del enc_out
+        x = self.Conv1(x) # [6, 128, 32, 64]
+        x = rearrange(x, 'b c t d -> b t d c') # [6, 32, 64, 128]
+        x = self.ff(x) # [6, 32, 64, 128]
+        x = rearrange(x, 'b t d c -> b c t d') # [6, 128, 32, 64]
+        x = torch.max(x, dim=2)[0] # [6, 128, 64]
+        x = rearrange(x, 'b c t -> b t c') # [6, 64, 128]
+        x = self.ff2(x) # [6, 64, 74]
+        x = rearrange(x, 'b t c -> b c t') # [6, 74, 64]
+        X = x
+        #kshbdefukb
+
+
+

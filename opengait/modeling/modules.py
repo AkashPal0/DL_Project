@@ -19,7 +19,7 @@ class PatchEmbedding(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.ConvertToPatch(x)
-        x = self.projection(x)
+        x = self.projection(x)        
         return x
     
 class Attention(nn.Module):
