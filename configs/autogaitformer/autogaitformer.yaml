@@ -1,7 +1,7 @@
 # Note  : *** the batch_size should be equal to the gpus number at the test phase!!! ***
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/akash/Use/DL_Project/DL_Project-main/CASIA-B-pkl
+  dataset_root: /home/akash/Use/DL_Project/Datasets/CASIA-B-pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json # for train and test
   num_workers: 1
   remove_no_gallery: false
@@ -35,6 +35,9 @@ model_cfg:
   class_num: 74
   block_height : [4, 8, 16]
   patch_size : [4, [8, 4], [16, 8, 4]]
+  factor : 3
+  num_heads: 8
+  moving_avg: 5
 
 optimizer_cfg:
   lr: 1.0e-4
@@ -62,7 +65,7 @@ trainer_cfg:
     batch_size:
       - 3 # TripletSampler, batch_size[0] indicates Number of Identity
       - 2 #                 batch_size[1] indicates Samples sequqnce for each Identity
-    frames_num_fixed: 30 # fixed frames number for training
+    frames_num_fixed: 32 # fixed frames number for training
     frames_skip_num: 0 # min frames number for unfixed traing
     sample_type: fixed_ordered # fixed control input frames number, unordered for controlling order of input tensor; Other options: unfixed_ordered or all_ordered
     type: TripletSampler
