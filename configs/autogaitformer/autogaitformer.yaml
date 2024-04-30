@@ -1,7 +1,7 @@
 # Note  : *** the batch_size should be equal to the gpus number at the test phase!!! ***
 data_cfg:
   dataset_name: CASIA-B
-  dataset_root: /home/akash/Use/DL_Project/Datasets/CASIA-B-pkl
+  dataset_root: /media/asmita/Asmi_HDD/Gait_Dataset/CASIA-B-pkl
   dataset_partition: ./datasets/CASIA-B/CASIA-B.json # for train and test
   num_workers: 1
   remove_no_gallery: false
@@ -10,7 +10,7 @@ data_cfg:
 evaluator_cfg:
   enable_float16: false 
   restore_ckpt_strict: true
-  restore_hint: 80000
+  restore_hint: 1
   save_name: autogaitformer
   sampler:
     batch_size: 1 ## Keep this eqaul to the gpus number
@@ -53,13 +53,13 @@ scheduler_cfg:
 trainer_cfg:
   enable_float16: true # half_percesion float for memory reduction and speedup
   with_test: false
-  log_iter: 100
+  log_iter: 1
   restore_ckpt_strict: true
   restore_hint: 0
-  save_iter: 10000
+  save_iter: 1
   save_name: autogaitformer
   sync_BN: true
-  total_iter: 80000
+  total_iter: 1
   sampler:
     batch_shuffle: true
     batch_size:

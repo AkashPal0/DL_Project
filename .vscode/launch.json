@@ -18,7 +18,7 @@
                 "--cfgs",
                 "./configs/autogaitformer/autogaitformer.yaml",
                 "--phase",
-                "train"
+                "test"
               ],
               "env": {
                 "CUDA_VISIBLE_DEVICES": "0, 1, 2, 3"
