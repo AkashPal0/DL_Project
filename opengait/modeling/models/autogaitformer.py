@@ -99,8 +99,15 @@ class AutoGaitFormer(BaseModel):
 
     def forward(self, x):
         ipts, labs, _, _, seqL = x
+        sils = ipts[0].unsqueeze(1)
+        n1, _, s1, h1, w1 = sils.shape  # s is number of strips
+        
         ipts = ipts[0] ## ipts = [6, 32, 64, 64]
 
+        if s1 < 3:
+            repeat = 3 if s1 == 1 else 2
+            ipts = ipts.repeat(1, repeat, 1, 1)
+            
         '''Block 1'''
         x = rearrange(ipts, 'b t (s h) w -> b t s h w', h=self.block_height[0]) ## block_height= 4, x = [6, 32, 16, 4, 64]
         x = self.patch_embedding_L1(x)
@@ -200,11 +207,26 @@ class AutoGaitFormer(BaseModel):
         x = self.ff(x) # [6, 32, 64, 128]
         x = rearrange(x, 'b t d c -> b c t d') # [6, 128, 32, 64]
         x = torch.max(x, dim=2)[0] # [6, 128, 64]
+        
+        embed = x
+        
         x = rearrange(x, 'b c t -> b t c') # [6, 64, 128]
         x = self.ff2(x) # [6, 64, 74]
-        x = rearrange(x, 'b t c -> b c t') # [6, 74, 64]
-        X = x
-        #kshbdefukb
+        logi = rearrange(x, 'b t c -> b c t') # [6, 74, 64]
 
+        retval = {
+            'training_feat': {
+                'triplet': {'embeddings': embed, 'labels': labs},
+                'softmax': {'logits': logi, 'labels': labs}
+            },
+            'visual_summary': {
+                'image/sils': sils.view(n1*s1, 1, h1, w1)
+            },
+            'inference_feat': {
+                'embeddings': embed
+            }
+        }
+        return retval  
+    
 
 
